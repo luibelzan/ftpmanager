@@ -30,21 +30,47 @@ class VpnService:
             logger.info(f"[VPN:{code}] Túnel ya activo, reutilizando")
             return True
 
-        config = VpnService.config_path(client.vpn_config_file)
+        config = os.path.normpath(VpnService.config_path(client.vpn_config_file))
+
         if not os.path.exists(config):
             raise FileNotFoundError(f"Fichero VPN no encontrado: {config}")
 
-        openvpn_bin = settings.OPENVPN_BIN
-        cmd = [openvpn_bin, "--config", config, "--daemon", "--log", f"/tmp/vpn_{code}.log"]
+        openvpn_bin = os.path.normpath(settings.OPENVPN_BIN)
+        log_file = os.path.join(settings.OPENVPN_CONFIG_DIR, f"vpn_{code}.log")
+
+        cmd = [
+            openvpn_bin,
+            "--config", config,
+            "--log", log_file,
+            "--verb", "4",
+        ]
 
         logger.info(f"[VPN:{code}] Iniciando túnel: {config}")
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        logger.info(f"[VPN:{code}] Log OpenVPN en: {log_file}")
+
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=os.path.dirname(config),
+        )
         _active_tunnels[code] = proc
 
-        connected = await VpnService._wait_for_tunnel(client.ftp_host, client.ftp_port, timeout=20)
+        connected = await VpnService._wait_for_tunnel(client.ftp_host, client.ftp_port, timeout=60)
+
         if not connected:
-            VpnService.disconnect(client.code)
-            raise ConnectionError(f"[VPN:{code}] El túnel no llegó a establecerse en 20 s")
+            # Leer las últimas líneas del log para diagnóstico
+            try:
+                with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                    last_lines = f.readlines()[-20:]
+                logger.error(f"[VPN:{code}] Últimas líneas del log OpenVPN:")
+                for line in last_lines:
+                    logger.error(f"[VPN:{code}] {line.rstrip()}")
+            except Exception:
+                pass
+
+            VpnService.disconnect(code)
+            raise ConnectionError(f"[VPN:{code}] El túnel no llegó a establecerse en 60 s")
 
         logger.info(f"[VPN:{code}] Túnel activo")
         return True

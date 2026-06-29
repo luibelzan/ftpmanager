@@ -14,6 +14,17 @@ from app.services.job_runner import JobRunner
 
 router = APIRouter(prefix="/clients", tags=["Clientes"])
 
+# ─── Test de conexión FTP ─────────────────────────────────────────────────────
+
+@router.post("/test-connection", response_model=FtpTestResult)
+async def test_ftp_connection(data: FtpTestRequest):
+    result = FtpEngine.test_connection(
+        host=data.ftp_host, port=data.ftp_port, protocol=data.ftp_protocol,
+        user=data.ftp_user, password=data.ftp_password,
+        timeout=data.ftp_timeout, passive=data.ftp_passive,
+    )
+    return result
+
 
 @router.get("/", response_model=list[ClientSummary])
 async def list_clients(active_only: bool = False, db: AsyncSession = Depends(get_db)):
@@ -96,13 +107,3 @@ async def delete_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Regla no encontrada")
 
 
-# ─── Test de conexión FTP ─────────────────────────────────────────────────────
-
-@router.post("/test-connection", response_model=FtpTestResult)
-async def test_ftp_connection(data: FtpTestRequest):
-    result = FtpEngine.test_connection(
-        host=data.ftp_host, port=data.ftp_port, protocol=data.ftp_protocol,
-        user=data.ftp_user, password=data.ftp_password,
-        timeout=data.ftp_timeout, passive=data.ftp_passive,
-    )
-    return result
