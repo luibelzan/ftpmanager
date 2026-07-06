@@ -11,6 +11,7 @@ from app.services.client_service import ClientService
 from app.services.ftp_engine import FtpEngine
 from app.services.scheduler_service import SchedulerService
 from app.services.job_runner import JobRunner
+from app.services.vpn_service import VpnService
 
 router = APIRouter(prefix="/clients", tags=["Clientes"])
 
@@ -23,6 +24,32 @@ async def test_ftp_connection(data: FtpTestRequest):
         user=data.ftp_user, password=data.ftp_password,
         timeout=data.ftp_timeout, passive=data.ftp_passive,
     )
+    return result
+
+@router.post("/{client_id}/test-connection-vpn", response_model=FtpTestResult)
+async def test_ftp_connection_vpn(client_id: str, db: AsyncSession = Depends(get_db)):
+    client = await ClientService.get_by_id(db, client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    if not client.vpn_required:
+        raise HTTPException(status_code=400, detail="Este cliente no requiere VPN")
+
+    try:
+        await VpnService.connect(client)
+        result = FtpEngine.test_connection(
+            host=client.ftp_host,
+            port=client.ftp_port,
+            protocol=client.ftp_protocol,
+            user=client.ftp_user,
+            password=client.ftp_password,
+            timeout=15,
+            passive=client.ftp_passive,
+        )
+    except Exception as exc:
+        result = {"success": False, "message": str(exc), "duration_ms": 0, "directories": []}
+    finally:
+        VpnService.disconnect(client.code)
+
     return result
 
 

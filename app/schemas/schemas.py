@@ -11,6 +11,7 @@ class FilePatternBase(BaseModel):
     file_type: str = Field(..., example="S04")
     local_subfolder: str = Field(..., example="S04")
     min_age_days: int = Field(1, ge=0)
+    max_age_days: Optional[int] = Field(None, ge=1)  # ← añadir esto
     min_size_bytes: int = Field(1, ge=0)
     sort_order: int = 0
 

@@ -97,10 +97,11 @@ class FtpEngine:
         self._ftp.cwd(remote_path)
         files = []
 
-        # Intentar MLSD primero, si falla usar LIST
+        # Intentar MLSD primero
         try:
             entries = []
             self._ftp.retrlines("MLSD", entries.append)
+            logger.info(f"[{self.client.code}] Usando MLSD en {remote_path}")
             for entry in entries:
                 parts = entry.split(";")
                 facts = {}
@@ -118,26 +119,35 @@ class FtpEngine:
                         mtime = datetime.utcnow()
                     files.append({"name": name, "size": size, "mtime": mtime})
 
-        except Exception:
-            # Fallback a LIST para servidores FTP antiguos
-            logger.info(f"[{self.client.code}] MLSD no soportado, usando LIST")
+        except Exception as e:
+            # Fallback a LIST
+            logger.info(f"[{self.client.code}] MLSD no soportado en {remote_path} ({e}), usando LIST con MDTM")
             raw_lines = []
             self._ftp.retrlines("LIST", raw_lines.append)
             for line in raw_lines:
                 parts = line.split()
                 if len(parts) < 9:
                     continue
-                # Formato Unix: -rw-r--r-- 1 user group size mes dia hora nombre
                 perms = parts[0]
                 if perms.startswith("d"):
-                    continue  # skip directorios
+                    continue
                 try:
                     size = int(parts[4])
                 except ValueError:
                     size = 0
                 name = " ".join(parts[8:])
-                # Sin mtime fiable en LIST, usamos hace 2 días como aproximación
-                mtime = datetime.utcnow() - timedelta(days=2)
+
+                # Intentar obtener fecha real con MDTM
+                try:
+                    mdtm_resp = self._ftp.sendcmd(f"MDTM {name}")
+                    mdtm_str = mdtm_resp.split()[-1]
+                    mtime = datetime.strptime(mdtm_str[:14], "%Y%m%d%H%M%S")
+                    logger.debug(f"[{self.client.code}] MDTM OK: {name} → {mtime}")
+                except Exception:
+                    # Si MDTM tampoco funciona, usar fecha aproximada
+                    logger.warning(f"[{self.client.code}] MDTM no disponible para {name}, usando fecha aproximada")
+                    mtime = datetime.utcnow() - timedelta(days=2)
+
                 files.append({"name": name, "size": size, "mtime": mtime})
 
         return files
@@ -239,7 +249,7 @@ class FtpEngine:
         result = []
         for f in files:
             name_ok = fnmatch.fnmatch(f["name"], pattern.pattern)
-            age_ok = f["mtime"] <= min_age_threshold
+            age_ok = f["mtime"] >= min_age_threshold
             size_ok = f["size"] >= pattern.min_size_bytes
             if name_ok and age_ok and size_ok:
                 result.append(f)
