@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,7 +59,7 @@ class JobRunner:
             # ── 2. FTP ────────────────────────────────────────────────────────
             engine = FtpEngine(client)
             try:
-                result = engine.execute_rules()
+                result = await asyncio.get_event_loop().run_in_executor(None, engine.execute_rules)
             except Exception as exc:
                 result_error = str(exc)
                 execution.status = JobStatus.FAILED

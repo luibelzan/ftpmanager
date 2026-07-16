@@ -118,6 +118,34 @@ async def get_resumen(
     return resumen
 
 
+@router.get("/resumen-global")
+async def get_resumen_global():
+    from app.db.database import AsyncSessionLocal
+    from sqlalchemy import text
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(text("""
+            SELECT
+                COUNT(*) FILTER (WHERE resultado = 'PROCESADO')   AS procesados,
+                COUNT(*) FILTER (WHERE resultado = 'VACIO')       AS vacios,
+                COUNT(*) FILTER (WHERE resultado = 'ERROR')       AS errores,
+                COUNT(*) FILTER (WHERE resultado = 'DESCONOCIDO') AS desconocidos,
+                COUNT(*)                                          AS total
+            FROM stats_resumen_cache
+            WHERE fecha_procesado > now() - (24 || ' hours')::interval
+        """))
+
+        row = result.fetchone()
+
+    return {
+        "total":         row[4],
+        "procesados":    row[0],
+        "vacios":        row[1],
+        "errores":       row[2],
+        "desconocidos":  row[3],
+    }
+
+
 # ─── GET /stats/{distribuidora}/tipos ─────────────────────────────────────────
 
 @router.get("/{distribuidora}/tipos")
