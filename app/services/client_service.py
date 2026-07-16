@@ -49,7 +49,9 @@ class ClientService:
             rule = DownloadRule(**patterns_data)
 
             for j, pat_data in enumerate(rule_data.file_patterns):
-                pat = FilePattern(**pat_data.model_dump(exclude={"sort_order"}), sort_order=j)
+                valid_fields = {"pattern", "file_type", "local_subfolder", "min_age_days", "min_size_bytes"}
+                pat_dict = {k: v for k, v in pat_data.model_dump().items() if k in valid_fields}
+                pat = FilePattern(**pat_dict, sort_order=j)
                 local_path = os.path.join(data.local_base_path, pat.local_subfolder)
                 os.makedirs(local_path, exist_ok=True)
                 rule.file_patterns.append(pat)
@@ -106,7 +108,15 @@ class ClientService:
         rule = DownloadRule(**rule_data, client_id=client_id)
 
         for j, pat_data in enumerate(patterns):
-            pat = FilePattern(**pat_data.model_dump(exclude={"sort_order"}), sort_order=j)
+            # Soportar tanto dicts como objetos Pydantic
+            if hasattr(pat_data, "model_dump"):
+                pat_dict = pat_data.model_dump(exclude={"sort_order"})
+            else:
+                pat_dict = {k: v for k, v in pat_data.items() if k != "sort_order"}
+            # Campos válidos del modelo FilePattern
+            valid_fields = {"rule_id", "pattern", "file_type", "local_subfolder", "min_age_days", "min_size_bytes"}
+            pat_dict_clean = {k: v for k, v in pat_dict.items() if k in valid_fields}
+            pat = FilePattern(**pat_dict_clean, sort_order=j)
             local_path = os.path.join(client.local_base_path, pat.local_subfolder)
             os.makedirs(local_path, exist_ok=True)
             rule.file_patterns.append(pat)

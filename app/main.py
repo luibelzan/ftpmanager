@@ -10,6 +10,8 @@ from app.db.database import engine, Base
 from app.api.routes.clients import router as clients_router
 from app.api.routes.dashboard import dashboard_router, alerts_router, jobs_router
 from app.services.scheduler_service import scheduler, SchedulerService
+from app.api.routes.stats import router as stats_router, close_all_pools
+
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
@@ -38,6 +40,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    await close_all_pools()
     logger.info("Apagando FTP Manager...")
     scheduler.shutdown(wait=False)
 
@@ -65,6 +68,7 @@ app.include_router(clients_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(alerts_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
+app.include_router(stats_router, prefix="/api/v1")
 
 
 @app.get("/health")
