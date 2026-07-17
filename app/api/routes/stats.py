@@ -149,43 +149,42 @@ async def get_resumen_global():
 # ─── GET /stats/{distribuidora}/tipos ─────────────────────────────────────────
 
 @router.get("/{distribuidora}/tipos")
-async def get_stats_por_tipo(distribuidora: str):
+async def get_stats_por_tipo(
+    distribuidora: str,
+    horas: int = Query(24, ge=1, le=720),
+):
     pool = await get_pool(distribuidora)
     resultados = []
-
     try:
         async with pool.acquire() as conn:
             tipos = await conn.fetch(
-                "SELECT DISTINCT tipo FROM core.t_procesamiento_log ORDER BY tipo"
+                """
+                SELECT DISTINCT tipo
+                FROM core.t_procesamiento_log
+                WHERE fecha_procesado > now() - ($1 || ' hours')::interval
+                ORDER BY tipo
+                """,
+                str(horas),
             )
             for row in tipos:
                 tipo = row["tipo"]
                 tabla = f"t_{tipo.lower()}"
                 tabla_error = f"{tabla}_error"
-                procesados = 0
-                errores = 0
-
                 try:
                     procesados = await conn.fetchval(
-                        f"SELECT COUNT(DISTINCT nombre_fichero)::int FROM core.{tabla}"
+                        f"SELECT COUNT(nombre_fichero)::int FROM core.{tabla}"
                     ) or 0
                 except Exception:
                     continue
-
                 try:
                     errores = await conn.fetchval(
-                        f"SELECT COUNT(DISTINCT nombre_fichero)::int FROM core.{tabla_error}"
+                        f"SELECT COUNT(nombre_fichero)::int FROM core.{tabla_error}"
                     ) or 0
                 except Exception:
                     errores = 0
-
                 resultados.append({"tipo": tipo, "procesados": procesados, "errores": errores})
-
-    except asyncpg.exceptions.UndefinedTableError:
-        pass
     except Exception as e:
         logger.warning(f"[{distribuidora}] Error tipos: {e}")
-
     return {"distribuidora": distribuidora, "porTipo": resultados}
 
 
