@@ -11,6 +11,7 @@ from app.api.routes.clients import router as clients_router
 from app.api.routes.dashboard import dashboard_router, alerts_router, jobs_router
 from app.services.scheduler_service import scheduler, SchedulerService
 from app.api.routes.stats import router as stats_router, close_all_pools
+from app.api.routes.imports import router as imports_router
 
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
@@ -69,6 +70,7 @@ app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(alerts_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(stats_router, prefix="/api/v1")
+app.include_router(imports_router, prefix="/api/v1")
 
 
 @app.get("/health")
